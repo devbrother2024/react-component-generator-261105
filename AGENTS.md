@@ -17,9 +17,9 @@
 
 ### Immutable
 
-- API 키 값을 클라이언트 응답으로 내보내지 마라. `/api/config` 는 provider별 boolean 만 반환한다 (`server/index.ts:150-153`). `ENV_KEYS` 의 값 자체를 응답·로그에 넣지 마라.
-- Google API 키는 URL 쿼리스트링에 실린다 (`server/index.ts:99`). 이 URL 이나 `fetch` 에러 객체를 통째로 로깅·응답에 넣지 마라.
-- 사용자가 입력한 키는 React state 에만 둔다 (`src/App.tsx:21`). provider 를 바꾸면 키를 비운다 (`src/App.tsx:64-68`) — 다른 provider 로 키가 전송되는 것을 막는 경계이므로 제거 금지.
+- API 키 값을 클라이언트 응답으로 내보내지 마라. `/api/config` 는 provider별 boolean 만 반환한다 (`server/index.ts:156-159`). `ENV_KEYS` 의 값 자체를 응답·로그에 넣지 마라.
+- Google API 키는 URL 쿼리스트링에 실린다 (`server/index.ts:109`). 이 URL 이나 `fetch` 에러 객체를 통째로 로깅·응답에 넣지 마라.
+- 사용자가 입력한 키는 React state 에만 둔다 (`src/App.tsx:21`). provider 를 바꾸면 키를 비운다 (`src/App.tsx:67-71`) — 다른 provider 로 키가 전송되는 것을 막는 경계이므로 제거 금지.
 - `.env` 는 커밋 금지 (`.gitignore`). 새 환경변수를 추가하면 `server/index.ts` 의 `ENV_KEYS` 와 `/api/config` 응답에 함께 반영한다.
 
 ### Sensitive Files (읽기·수정 차단)
@@ -76,32 +76,42 @@
 
 ### Hard Constraints
 
-- 생성 코드는 react-live `noInline` 모드로 실행된다 (`src/components/LivePreview.tsx:10`). 따라서 `import` 불가, 컴포넌트 정의 후 마지막에 `render(<X />)` 호출이 필수다. 이 계약은 `SYSTEM_PROMPT` (`server/index.ts:7-49`) 와 `ensureRenderCall` (`server/generator.ts:16`) 양쪽이 지킨다.
-- 생성 코드는 TypeScript 문법 금지 (`server/index.ts:20`). react-live 는 JS 로만 변환한다.
-- 서버 포트 3002 는 `server/index.ts:139` 와 `vite.config.ts:11` (proxy target) 두 곳에 하드코딩되어 있다. 하나만 바꾸면 프론트가 API 에 닿지 않는다. 같이 수정하라.
+- 생성 코드는 react-live `noInline` 모드로 실행된다 (`src/components/LivePreview.tsx:10`). 따라서 `import` 불가, 컴포넌트 정의 후 마지막에 `render(<X />)` 호출이 필수다. 이 계약은 `SYSTEM_PROMPT` (`server/index.ts:8-50`) 와 `ensureRenderCall` (`server/generator.ts:16`) 양쪽이 지킨다.
+- 생성 코드는 TypeScript 문법 금지 (`server/index.ts:21`). react-live 는 JS 로만 변환한다.
+- 서버 포트 3002 는 `server/index.ts:143` 와 `vite.config.ts:11` (proxy target) 두 곳에 하드코딩되어 있다. 하나만 바꾸면 프론트가 API 에 닿지 않는다. 같이 수정하라.
 
 ### Double Defense (한쪽만 제거하지 마라)
 
-- 코드펜스: 프롬프트가 "펜스 없이 응답" 을 요구하고 (`server/index.ts:16`), 서버가 `stripCodeFences` 로 한 번 더 제거한다 (`server/generator.ts:5`).
-- render 호출: 프롬프트가 요구하고 (`server/index.ts:12`), `ensureRenderCall` 이 누락 시 주입한다.
-- 에러 분류: `callAnthropic` / `callGoogleModel` 이 `Claude API error: <status>` / `Gemini API error: <status>` 문자열을 던지고 (`server/index.ts:85,112`), 핸들러가 `message.includes('503' | '429')` 로 상태코드를 복원한다 (`server/index.ts:194,201`). 에러 메시지 포맷을 바꾸면 503/429 사용자 안내가 조용히 사라진다.
+- 코드펜스: 프롬프트가 "펜스 없이 응답" 을 요구하고 (`server/index.ts:17`), 서버가 `stripCodeFences` 로 한 번 더 제거한다 (`server/generator.ts:5`). 스트리밍 중 화면용 코드는 `stripStreamingFences` (`src/utils/streamingCode.ts`) 가 앞뒤 펜스만 가리고, 최종 코드는 `done` 이벤트의 서버 정규화 결과를 쓴다.
+- render 호출: 프롬프트가 요구하고 (`server/index.ts:13`), `ensureRenderCall` 이 누락 시 주입한다 (스트림 끝의 `done` 코드에 적용, `server/stream.ts` 의 `createEventStream`).
+- 에러 분류: `openAnthropicStream` / `openGoogleModelStream` (`server/index.ts:96,123`) 과 `server/stream.ts` 의 `anthropicTextDeltas` / `googleTextDeltas` 가 `Claude API error: <status|종류>` / `Gemini API error: <status|코드>` 문자열을 던지고, `mapErrorMessage` (`server/errors.ts`) 가 `message.includes()` 로 503/429 를 복원한다. 연결 단계 에러는 HTTP 상태코드로, 스트림 도중 에러는 `error` 이벤트로 나간다. 에러 메시지 포맷을 바꾸면 503/429 사용자 안내가 조용히 사라진다.
+
+### Streaming (스트리밍 계약)
+
+- `POST /api/generate` 는 JSON 이 아니라 NDJSON 스트림(`application/x-ndjson`)을 돌려준다. 이벤트는 `delta` (원문 텍스트), `done` (펜스 제거 + render 주입된 최종 코드), `error` 뿐이다 (`server/stream.ts`, 클라이언트 `src/utils/streamEvents.ts`). 두 타입 정의를 같이 바꿔라.
+- 첫 바이트가 나가기 전의 실패(키 없음, provider HTTP 에러)만 HTTP 상태코드 + JSON `{ error }` 로 응답한다. 이후 실패는 `error` 이벤트다. 클라이언트 (`src/hooks/useComponentGenerator.ts`) 는 두 경로를 모두 처리한다.
+- `done` 없이 끝난 스트림은 성공이 아니다. 서버 (`*TextDeltas`) 와 클라이언트 모두 "응답이 중간에 끊겼습니다" 에러로 처리한다. 잘린 코드가 컴포넌트 목록(localStorage)에 들어가면 안 된다. 단, 막는 범위는 "종료 표지(Google `finishReason`, Anthropic `message_stop`) 부재", 도중 error 페이로드, Google `MAX_TOKENS` 까지다. 종료 표지가 *있는* 비정상 종료 (Google `SAFETY` / `RECITATION` 등, Anthropic `stop_reason: max_tokens`) 는 아직 성공으로 처리된다.
+- 해석할 수 없는 응답 줄(JSON 아님, `null`, 구 서버 포맷)은 `UNREADABLE_RESPONSE` 안내 에러가 된다 (`src/utils/streamEvents.ts`).
+- 스트리밍 중인 컴포넌트(`streamingComponent`)는 영속화하지 않는다. 완료되면 같은 `id` 로 `components` 에 들어가고, `App` 이 한 배열·같은 key 로 그려 카드가 리마운트되지 않은 채 탭이 코드 → 미리보기로 전환된다. id 를 바꾸거나 배열을 분리하면 이 전환이 깨진다.
+- 클라이언트가 끊으면 업스트림 fetch 를 abort 한다 (`req.signal` + `createEventStream` 의 `onCancel`). `Bun.serve` 의 `idleTimeout` 은 첫 토큰 지연을 견디도록 120초다.
 
 ### Test Boundary
 
-- 테스트가 있는 곳: `server/generator.ts`, `server/fallback.ts`, `src/components/PromptInput.tsx`.
-- 테스트가 없는 곳: `server/index.ts` (import 시 `Bun.serve` 가 실행되는 부수효과 파일), `src/hooks/useComponentGenerator.ts`, `src/App.tsx`.
+- 테스트가 있는 곳: `server/generator.ts`, `server/fallback.ts`, `server/stream.ts`, `server/errors.ts`, `src/components/PromptInput.tsx`, `ComponentCard.tsx`, `CodeView.tsx` (`LivePreview` / `Window` / `PixelArt` 는 테스트 없음), `src/hooks/useComponentGenerator.ts`, `usePersistentState.ts`, `src/App.tsx`, `src/utils/*`.
+- 테스트가 없는 곳: `server/index.ts` (import 시 `Bun.serve` 가 실행되는 부수효과 파일). 연결 열기·폴백·abort 배선만 남아 있으니 스트림 본문 처리 같은 로직은 여기에 두지 말고 `stream.ts` 로 보낸다.
 - 새 로직은 테스트 가능하도록 부수효과 없는 모듈로 분리하고 (`server/generator.ts:1-2` 주석 참고) `*.test.ts(x)` 를 옆에 둔다.
 
 ### Asymmetry
 
-- 모델 폴백은 Google 에만 있다 (`GOOGLE_MODELS`, `server/index.ts:5,135`). Anthropic 은 단일 모델 고정 (`server/index.ts:77`). Anthropic 에도 폴백이 필요한지는 임의로 맞추지 말고 사용자에게 확인한다.
-- `MAX_TOKENS` 절단 검사는 Google 경로에만 있다 (`server/index.ts:123`). Anthropic 응답의 `stop_reason` 은 확인하지 않는다.
+- 모델 폴백은 Google 에만 있다 (`GOOGLE_MODELS`, `server/index.ts:6,131-141`). Anthropic 은 단일 모델 고정 (`server/index.ts:86`). Anthropic 에도 폴백이 필요한지는 임의로 맞추지 말고 사용자에게 확인한다.
+- 폴백은 스트림 연결 단계(응답 코드 확인)에서만 동작한다. 첫 바이트가 클라이언트로 나간 뒤의 실패는 되돌릴 수 없으므로 폴백 없이 `error` 이벤트가 된다.
+- `MAX_TOKENS` 절단 검사는 Google 경로에만 있다 (`server/stream.ts` 의 `googleTextDeltas`). 스트리밍 도입 후 절단은 모델 폴백을 일으키지 않고 에러 이벤트가 된다. Anthropic 응답의 `stop_reason` 은 확인하지 않는다 (`message_stop` 유무만 본다).
 
 ### 타입 검사 범위
 
 - `tsc -b` 는 `src/` (`tsconfig.app.json:27`) 와 `vite.config.ts` (`tsconfig.node.json:25`) 만 검사한다. `server/` 는 어느 tsconfig 에도 포함되지 않아 `bun run build` 로 타입 오류가 잡히지 않는다. server 변경 시 타입 정확성은 직접 점검한다. `.claude/hooks/` 도 마찬가지로 어느 tsconfig 에도 없다 (lint 와 vitest 만 적용된다).
 
-sandbox 안의 Bash 도구에서 `bun <파일>` / `bun -e` 가 출력 없이 exit 1 로 끝나는 것이 관찰됐다 (`bun run test|lint|build` 는 정상, 원인 미확인). 커밋 훅은 Bash 도구가 아니라 하네스가 실행하므로 영향이 없었다. 스크립트를 직접 실행해 검증할 때 이 증상이 나오면 코드 문제로 단정하지 마라.
+sandbox 안의 Bash 도구에서 `bun <파일>` / `bun -e` 가 출력 없이 exit 1 로 끝나는 것이 관찰됐다 (`bun run test|lint|build` 는 정상). 샌드박스 안에서 `bun run server` 가 이 증상으로 죽고, 같은 명령이 샌드박스 밖에서는 정상 기동하는 것을 확인했다 — 원인은 샌드박스다. 다만 샌드박스 밖에서 서버를 띄우면 Bun 이 `.env` 를 자동 로드한다(샌드박스가 막으려던 경로). 사용자가 해제를 명시적으로 허락했을 때만 그렇게 하고, 키 값을 출력하거나 응답에 싣지 마라. 커밋 훅은 Bash 도구가 아니라 하네스가 실행하므로 영향이 없었다. 스크립트를 직접 실행해 검증할 때 이 증상이 나오면 코드 문제로 단정하지 마라.
 
 ## Project Context
 

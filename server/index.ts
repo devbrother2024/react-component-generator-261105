@@ -1,5 +1,6 @@
-import { stripCodeFences, ensureRenderCall } from './generator';
 import { withModelFallback } from './fallback';
+import { mapErrorMessage } from './errors';
+import { createEventStream, anthropicTextDeltas, googleTextDeltas } from './stream';
 
 // 우선순위 순서. 앞 모델이 실패하면 다음 모델로 폴백한다.
 const GOOGLE_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash'];
@@ -65,7 +66,15 @@ function resolveApiKey(provider: Provider, clientKey?: string): string | null {
   return clientKey || ENV_KEYS[provider] || null;
 }
 
-async function callAnthropic(prompt: string, apiKey: string): Promise<string> {
+// provider 호출은 "연결을 열고 응답 코드를 확인"한 뒤 텍스트 델타 스트림을 돌려준다.
+// 연결 단계 에러(503/429 등)는 스트림이 시작되기 전에 던져져 기존처럼 HTTP 상태코드로 응답된다.
+// 에러 메시지 포맷 `<이름> API error: <status>` 는 mapErrorMessage 가 의존한다.
+// 스트림 본문 처리(anthropicTextDeltas / googleTextDeltas)는 테스트 가능하도록 stream.ts 에 있다.
+async function openAnthropicStream(
+  prompt: string,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<AsyncGenerator<string>> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -76,27 +85,28 @@ async function callAnthropic(prompt: string, apiKey: string): Promise<string> {
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
+      stream: true,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     }),
+    signal,
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new Error(`Claude API error: ${response.status}`);
   }
 
-  const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
-  };
-
-  return data.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('');
+  return anthropicTextDeltas(response.body);
 }
 
-async function callGoogleModel(prompt: string, apiKey: string, model: string): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+async function openGoogleModelStream(
+  prompt: string,
+  apiKey: string,
+  model: string,
+  signal: AbortSignal,
+): Promise<ReadableStream<Uint8Array>> {
+  // 키가 쿼리스트링에 실린다. 이 url 이나 fetch 에러 객체를 로그·응답에 넣지 마라.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -106,37 +116,33 @@ async function callGoogleModel(prompt: string, apiKey: string, model: string): P
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { maxOutputTokens: 8192 },
     }),
+    signal,
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new Error(`Gemini API error: ${response.status}`);
   }
 
-  const data = (await response.json()) as {
-    candidates: Array<{
-      content: { parts: Array<{ text?: string }> };
-      finishReason?: string;
-    }>;
-  };
-
-  const candidate = data.candidates?.[0];
-  if (candidate?.finishReason === 'MAX_TOKENS') {
-    throw new Error('생성된 코드가 너무 길어 잘렸습니다. 더 간단한 컴포넌트를 요청해주세요.');
-  }
-
-  return (
-    candidate?.content?.parts
-      ?.map((part) => part.text)
-      ?.join('') ?? ''
-  );
+  return response.body;
 }
 
-async function callGoogle(prompt: string, apiKey: string): Promise<string> {
-  return withModelFallback(GOOGLE_MODELS, (model) => callGoogleModel(prompt, apiKey, model));
+// 모델 폴백은 연결 단계에서만 동작한다. 첫 바이트가 클라이언트로 나간 뒤에는 되돌릴 수 없으므로
+// 스트림 도중 실패(MAX_TOKENS 절단 포함)는 폴백 없이 error 이벤트가 된다.
+async function openGoogleStream(
+  prompt: string,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<AsyncGenerator<string>> {
+  const body = await withModelFallback(GOOGLE_MODELS, (model) =>
+    openGoogleModelStream(prompt, apiKey, model, signal),
+  );
+  return googleTextDeltas(body);
 }
 
 const server = Bun.serve({
   port: 3002,
+  // 모델의 첫 토큰이 늦어도 스트림 연결이 끊기지 않도록 기본값(10초)보다 넉넉히 둔다.
+  idleTimeout: 120,
   async fetch(req) {
     if (req.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS });
@@ -180,35 +186,29 @@ const server = Bun.serve({
           );
         }
 
-        const text =
+        // 클라이언트가 연결을 끊으면 업스트림 provider 요청도 중단한다.
+        // 연결 단계(응답 헤더 전)의 끊김은 req.signal, 스트림 중의 끊김은 createEventStream 의 onCancel 이 맡는다.
+        const upstream = new AbortController();
+        req.signal.addEventListener('abort', () => upstream.abort(), { once: true });
+        if (req.signal.aborted) upstream.abort(); // 리스너 등록 전에 이미 끊긴 경우
+
+        const textStream =
           provider === 'google'
-            ? await callGoogle(prompt, resolvedKey)
-            : await callAnthropic(prompt, resolvedKey);
+            ? await openGoogleStream(prompt, resolvedKey, upstream.signal)
+            : await openAnthropicStream(prompt, resolvedKey, upstream.signal);
 
-        const code = ensureRenderCall(stripCodeFences(text));
-
-        return Response.json({ code }, { headers: CORS_HEADERS });
+        return new Response(createEventStream(textStream, () => upstream.abort()), {
+          headers: {
+            ...CORS_HEADERS,
+            'Content-Type': 'application/x-ndjson; charset=utf-8',
+            'Cache-Control': 'no-cache',
+          },
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        const { status, error } = mapErrorMessage(message);
 
-        if (message.includes('503')) {
-          return Response.json(
-            { error: 'API 서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.' },
-            { status: 503, headers: CORS_HEADERS }
-          );
-        }
-
-        if (message.includes('429')) {
-          return Response.json(
-            { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
-            { status: 429, headers: CORS_HEADERS }
-          );
-        }
-
-        return Response.json(
-          { error: message },
-          { status: 500, headers: CORS_HEADERS }
-        );
+        return Response.json({ error }, { status, headers: CORS_HEADERS });
       }
     }
 
