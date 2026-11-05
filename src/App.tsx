@@ -4,6 +4,10 @@ import { ComponentCard } from './components/ComponentCard';
 import { Window } from './components/Window';
 import { PixelLogo, PixelMac } from './components/PixelArt';
 import { useComponentGenerator } from './hooks/useComponentGenerator';
+import { usePersistentState } from './hooks/usePersistentState';
+import { STORAGE_KEYS } from './utils/storage';
+import { parseProvider, parsePromptHistory } from './utils/storageParsers';
+import { addToHistory } from './utils/promptHistory';
 import type { Provider } from './types';
 import './App.css';
 
@@ -13,9 +17,19 @@ const PROVIDER_CONFIG = {
 } as const;
 
 function App() {
+  // API 키는 의도적으로 영속화하지 않는다. React state 에만 둔다 (src/AGENTS.md Local Golden Rules).
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [provider, setProvider] = useState<Provider>('google');
+  const [provider, setProvider] = usePersistentState<Provider>(
+    STORAGE_KEYS.provider,
+    'google',
+    parseProvider,
+  );
+  const [promptHistory, setPromptHistory] = usePersistentState<string[]>(
+    STORAGE_KEYS.promptHistory,
+    [],
+    parsePromptHistory,
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [envKeys, setEnvKeys] = useState<Record<Provider, boolean>>({
     anthropic: false,
@@ -43,6 +57,7 @@ function App() {
       return;
     }
     setNotice(null);
+    setPromptHistory((prev) => addToHistory(prev, prompt));
     generate(prompt, apiKey || undefined, provider);
   };
 
@@ -71,7 +86,11 @@ function App() {
       <main className="desktop">
         <div className="workspace">
           <Window title="새 컴포넌트" className="win--composer">
-            <PromptInput onGenerate={handleGenerate} isLoading={isLoading} />
+            <PromptInput
+              onGenerate={handleGenerate}
+              isLoading={isLoading}
+              history={promptHistory}
+            />
           </Window>
 
           <Window title="실행 설정" className="win--settings">

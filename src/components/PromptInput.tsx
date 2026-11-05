@@ -4,6 +4,7 @@ import { validatePrompt } from '../utils/validatePrompt';
 interface PromptInputProps {
   onGenerate: (prompt: string) => void;
   isLoading: boolean;
+  history?: string[];
 }
 
 const EXAMPLES = [
@@ -15,7 +16,7 @@ const EXAMPLES = [
   '테이블 행 상세보기 패널. 선택한 고객의 기본 정보와 최근 활동 표시',
 ];
 
-export function PromptInput({ onGenerate, isLoading }: PromptInputProps) {
+export function PromptInput({ onGenerate, isLoading, history = [] }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const validation = validatePrompt(prompt);
 
@@ -66,6 +67,26 @@ export function PromptInput({ onGenerate, isLoading }: PromptInputProps) {
           </button>
         </div>
       </form>
+      {history.length > 0 && (
+        <div className="prompt-examples">
+          <p className="examples-label" id="history-label">
+            최근 프롬프트
+          </p>
+          <ul className="examples-list" aria-labelledby="history-label">
+            {history.map((item) => (
+              <li key={item}>
+                <button
+                  className="example-row"
+                  onClick={() => handleExampleClick(item)}
+                  type="button"
+                >
+                  {item}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="prompt-examples">
         <p className="examples-label" id="examples-label">
           예시 프롬프트
