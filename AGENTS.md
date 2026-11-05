@@ -19,7 +19,7 @@
 
 - API 키 값을 클라이언트 응답으로 내보내지 마라. `/api/config` 는 provider별 boolean 만 반환한다 (`server/index.ts:150-153`). `ENV_KEYS` 의 값 자체를 응답·로그에 넣지 마라.
 - Google API 키는 URL 쿼리스트링에 실린다 (`server/index.ts:99`). 이 URL 이나 `fetch` 에러 객체를 통째로 로깅·응답에 넣지 마라.
-- 사용자가 입력한 키는 React state 에만 둔다 (`src/App.tsx:16`). provider 를 바꾸면 키를 비운다 (`src/App.tsx:49-53`) — 다른 provider 로 키가 전송되는 것을 막는 경계이므로 제거 금지.
+- 사용자가 입력한 키는 React state 에만 둔다 (`src/App.tsx:21`). provider 를 바꾸면 키를 비운다 (`src/App.tsx:64-68`) — 다른 provider 로 키가 전송되는 것을 막는 경계이므로 제거 금지.
 - `.env` 는 커밋 금지 (`.gitignore`). 새 환경변수를 추가하면 `server/index.ts` 의 `ENV_KEYS` 와 `/api/config` 응답에 함께 반영한다.
 
 ### Hard Constraints
