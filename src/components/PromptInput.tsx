@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { validatePrompt } from '../utils/validatePrompt';
 
 interface PromptInputProps {
   onGenerate: (prompt: string) => void;
@@ -16,10 +17,11 @@ const EXAMPLES = [
 
 export function PromptInput({ onGenerate, isLoading }: PromptInputProps) {
   const [prompt, setPrompt] = useState('');
+  const validation = validatePrompt(prompt);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (prompt.trim() && !isLoading) {
+    if (prompt.trim() && validation.valid && !isLoading) {
       onGenerate(prompt.trim());
     }
   };
@@ -48,12 +50,17 @@ export function PromptInput({ onGenerate, isLoading }: PromptInputProps) {
             }
           }}
         />
+        {!validation.valid && (
+          <p className="prompt-error" role="alert">
+            {validation.message}
+          </p>
+        )}
         <div className="prompt-actions">
           <p className="prompt-hint">Cmd/Ctrl + Enter로도 생성할 수 있습니다.</p>
           <button
             type="submit"
             className="btn-generate"
-            disabled={!prompt.trim() || isLoading}
+            disabled={!prompt.trim() || !validation.valid || isLoading}
           >
             {isLoading ? <span>생성 중...</span> : '컴포넌트 생성'}
           </button>
