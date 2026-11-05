@@ -1,0 +1,134 @@
+@font-face {
+  font-family: 'Galmuri14';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../node_modules/galmuri/dist/Galmuri14.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Galmuri11';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../node_modules/galmuri/dist/Galmuri11.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Galmuri11';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../node_modules/galmuri/dist/Galmuri11-Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'GalmuriMono11';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../node_modules/galmuri/dist/GalmuriMono11.woff2') format('woff2');
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+
+  --ink: #000000;
+  --paper: #ffffff;
+  --chrome: #dddddd;
+  --chrome-dim: #c4c4c4;
+  --chrome-shade: #8f8f8f;
+  --desk-a: #7f8bd8;
+  --desk-b: #95a0e8;
+  --yellow: #ffd23f;
+  --focus: #2f3df0;
+  --ok: #0b7a3b;
+  --bad: #c4301a;
+
+  --font-ui: 'Galmuri14', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-small: 'Galmuri11', 'Galmuri14', 'Apple SD Gothic Neo', sans-serif;
+  --font-code: 'GalmuriMono11', ui-monospace, Menlo, Consolas, monospace;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  background-color: var(--desk-a);
+  background-image: conic-gradient(
+    var(--desk-b) 25%,
+    transparent 0 50%,
+    var(--desk-b) 0 75%,
+    transparent 0
+  );
+  background-size: 4px 4px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* 클래식 스크롤바 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink) var(--chrome);
+}
+
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--paper);
+  background-image: conic-gradient(var(--chrome-dim) 25%, transparent 0 50%, var(--chrome-dim) 0 75%, transparent 0);
+  background-size: 2px 2px;
+  border-left: 2px solid var(--ink);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--chrome);
+  border: 2px solid var(--ink);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--chrome);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
