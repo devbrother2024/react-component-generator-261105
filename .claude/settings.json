@@ -1,5 +1,125 @@
 {
   "worktree": {
     "baseRef": "head"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "network": {
+      "allowLocalBinding": true
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-test.ts\" || exit 2",
+            "timeout": 300,
+            "statusMessage": "커밋 전 테스트 실행 중..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/hooks/remind-tdd.ts\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(*.p12)",
+      "Read(*.pfx)",
+      "Read(*.jks)",
+      "Read(*.keystore)",
+      "Read(id_rsa*)",
+      "Read(id_dsa*)",
+      "Read(id_ecdsa*)",
+      "Read(id_ed25519*)",
+      "Read(secret.*)",
+      "Read(secrets.*)",
+      "Read(*.secret)",
+      "Read(*.secrets)",
+      "Read(secret/**)",
+      "Read(secrets/**)",
+      "Read(.secrets/**)",
+      "Read(credentials)",
+      "Read(credentials.*)",
+      "Read(*.credentials)",
+      "Read(credentials/**)",
+      "Read(service-account*.json)",
+      "Read(.npmrc)",
+      "Read(.netrc)",
+      "Read(.pgpass)",
+      "Read(.htpasswd)",
+      "Read(.aws/**)",
+      "Read(.ssh/**)",
+      "Read(.gnupg/**)",
+      "Read(.kube/**)",
+      "Read(!.env.example)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.docker/config.json)",
+      "Read(~/.npmrc)",
+      "Read(~/.netrc)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(*.pem)",
+      "Edit(*.key)",
+      "Edit(*.p12)",
+      "Edit(*.pfx)",
+      "Edit(*.jks)",
+      "Edit(*.keystore)",
+      "Edit(id_rsa*)",
+      "Edit(id_dsa*)",
+      "Edit(id_ecdsa*)",
+      "Edit(id_ed25519*)",
+      "Edit(secret.*)",
+      "Edit(secrets.*)",
+      "Edit(*.secret)",
+      "Edit(*.secrets)",
+      "Edit(secret/**)",
+      "Edit(secrets/**)",
+      "Edit(.secrets/**)",
+      "Edit(credentials)",
+      "Edit(credentials.*)",
+      "Edit(*.credentials)",
+      "Edit(credentials/**)",
+      "Edit(service-account*.json)",
+      "Edit(.npmrc)",
+      "Edit(.netrc)",
+      "Edit(.pgpass)",
+      "Edit(.htpasswd)",
+      "Edit(.aws/**)",
+      "Edit(.ssh/**)",
+      "Edit(.gnupg/**)",
+      "Edit(.kube/**)",
+      "Edit(!.env.example)",
+      "Edit(~/.ssh/**)",
+      "Edit(~/.aws/**)",
+      "Edit(~/.gnupg/**)",
+      "Edit(~/.kube/**)",
+      "Edit(~/.config/gcloud/**)",
+      "Edit(~/.config/gh/**)",
+      "Edit(~/.docker/config.json)",
+      "Edit(~/.npmrc)",
+      "Edit(~/.netrc)"
+    ]
   }
 }
