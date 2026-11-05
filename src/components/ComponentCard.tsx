@@ -9,13 +9,31 @@ interface ComponentCardProps {
   onRemove: (id: string) => void;
   onRegenerate: (prompt: string) => void;
   isLoading: boolean;
+  /** 코드가 아직 생성되는 중이다. 코드 탭을 보여주고, 끝나면 미리보기 탭으로 전환한다. */
+  isStreaming?: boolean;
 }
 
 type Tab = 'preview' | 'code';
 
-export function ComponentCard({ component, onRemove, onRegenerate, isLoading }: ComponentCardProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('preview');
+const tabFor = (isStreaming: boolean): Tab => (isStreaming ? 'code' : 'preview');
+
+export function ComponentCard({
+  component,
+  onRemove,
+  onRegenerate,
+  isLoading,
+  isStreaming = false,
+}: ComponentCardProps) {
+  const [activeTab, setActiveTab] = useState<Tab>(tabFor(isStreaming));
+  const [wasStreaming, setWasStreaming] = useState(isStreaming);
   const [previewKey, setPreviewKey] = useState(0);
+
+  // 스트리밍 상태가 바뀌는 순간 탭을 맞춘다 (렌더 중 상태 조정 패턴).
+  if (wasStreaming !== isStreaming) {
+    setWasStreaming(isStreaming);
+    setActiveTab(tabFor(isStreaming));
+  }
+
   const createdAt = component.createdAt.toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -25,7 +43,7 @@ export function ComponentCard({ component, onRemove, onRegenerate, isLoading }: 
     <Window
       title={`${createdAt}에 생성`}
       className="component-card"
-      onClose={() => onRemove(component.id)}
+      onClose={isStreaming ? undefined : () => onRemove(component.id)}
       closeLabel="삭제"
     >
       <div className="card-header">
@@ -54,6 +72,7 @@ export function ComponentCard({ component, onRemove, onRegenerate, isLoading }: 
         <button
           className={`tab ${activeTab === 'preview' ? 'tab--active' : ''}`}
           onClick={() => setActiveTab('preview')}
+          disabled={isStreaming}
           role="tab"
           aria-selected={activeTab === 'preview'}
           type="button"
@@ -74,7 +93,7 @@ export function ComponentCard({ component, onRemove, onRegenerate, isLoading }: 
         {activeTab === 'preview' ? (
           <LivePreview key={previewKey} code={component.code} />
         ) : (
-          <CodeView code={component.code} />
+          <CodeView code={component.code} isStreaming={isStreaming} />
         )}
       </div>
     </Window>

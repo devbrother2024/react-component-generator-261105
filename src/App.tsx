@@ -36,8 +36,11 @@ function App() {
     google: false,
   });
   const keyInputRef = useRef<HTMLInputElement>(null);
-  const { components, isLoading, error, generate, removeComponent, clearAll } =
+  const { components, streamingComponent, isLoading, error, generate, removeComponent, clearAll } =
     useComponentGenerator();
+  // 스트리밍 카드는 완료 후 같은 id 로 목록에 들어온다. 한 배열에서 같은 key 로 그려야
+  // 카드가 다시 마운트되지 않고 탭만 코드 → 미리보기로 전환된다.
+  const cards = streamingComponent ? [streamingComponent, ...components] : components;
 
   useEffect(() => {
     fetch('/api/config')
@@ -159,31 +162,16 @@ function App() {
         )}
 
         <section className="results" aria-label="생성 결과">
-          {components.length > 0 && (
+          {cards.length > 0 && (
             <div className="results-bar">
-              <h2>생성된 컴포넌트 {components.length}개</h2>
+              <h2>생성된 컴포넌트 {cards.length}개</h2>
               <button className="btn btn-clear" onClick={clearAll} type="button">
                 전체 삭제
               </button>
             </div>
           )}
 
-          {isLoading && (
-            <Window title="생성 중" className="win--loading">
-              <div className="loading-body">
-                <p>컴포넌트를 생성하고 있습니다...</p>
-                <div
-                  className="progress"
-                  role="progressbar"
-                  aria-label="컴포넌트 생성 진행 중"
-                >
-                  <span />
-                </div>
-              </div>
-            </Window>
-          )}
-
-          {components.length === 0 && !isLoading && (
+          {cards.length === 0 && (
             <div className="empty-state">
               <PixelMac size={100} />
               <div className="empty-copy">
@@ -197,13 +185,14 @@ function App() {
           )}
 
           <div className="results-grid">
-            {components.map((component) => (
+            {cards.map((component) => (
               <ComponentCard
                 key={component.id}
                 component={component}
                 onRemove={removeComponent}
                 onRegenerate={handleGenerate}
                 isLoading={isLoading}
+                isStreaming={component.id === streamingComponent?.id}
               />
             ))}
           </div>
